@@ -1,0 +1,250 @@
+---
+title: "Project2"
+author: "Ben Spanswick"
+date: "December 3, 2018"
+output: html_document
+---
+
+Lets grab the data, and import some pakcages to start:
+
+
+```{r}
+
+data = read.csv("CaseStudy2-data.csv", header = TRUE)
+pred = read.csv("CaseStudy2Validation.csv", header = TRUE)
+
+data_original <- data
+pred_original <- pred
+
+#install.packages("Amelia")
+#install.packages('lemon')
+#install.packages("mltools")
+
+library(mltools) #mltools for one hot encoding
+library(data.table)
+library(Amelia)
+library(ggplot2) 
+library(tidyr)
+library(purrr)
+library(lemon) #prints prettyer tables
+library(qtlcharts) #interactive plots - corr plot in this case
+library(corrplot) #package corrplot
+
+
+knit_print.data.frame <- lemon_print
+
+```
+
+
+Onto EDA: 
+
+First lets look at the dimensions and check for missing varaibles. 
+
+
+```{r}
+
+
+missmap(data,
+        main = "Missing Attrition Data",
+        x.cex = 0.55,
+        y.labels  = NULL,
+        y.at = NULL
+  )
+
+
+```
+
+```{r}
+
+
+data$Attrition <- ifelse(data$Attrition == "Yes", 1, 0)
+
+
+str(data)
+
+```
+```{r}
+head(data, 3)
+
+```
+
+```{r}
+NF <- data[, sapply(data, is.numeric)]
+CF <- data[, sapply(data, is.factor)]
+
+```
+
+```{r}
+
+NF %>%
+  gather() %>%                             # Convert to key-value pairs
+  ggplot(aes(value)) +                     # Plot the values
+  facet_wrap(~ key, scales = "free") +   # In separate panels
+  geom_histogram()
+
+
+```
+
+```{r}
+
+cors <- cor(NF)
+corrplot(cors, method = "circle") #standard ugly correlation matrix
+
+```
+
+```{r}
+
+NF$ID <-NULL
+iplotCorr(NF) #create interactive qtlchart for correlation
+
+
+```
+
+```{r}
+drops <- c("YearsWithCurrManager","YearsSinceLastPromotion", "YearsInCurrentRole", "TotalWorkingYears", "JobLevel", "PercentSalaryHike")
+NF <- NF[ , !(names(NF) %in% drops)]
+```
+
+```{r}
+iplotCorr(NF)
+
+```
+
+```{r}
+
+CF_DT <- as.data.table(CF)
+CF1h <- as.data.frame(one_hot(CF_DT))
+
+data_1h <- merge(NF, CF1h, by.x = 0, by.y = 0, all.x = TRUE, all.y = TRUE)
+
+head(data_1h, 3)
+
+```
+
+```{r}
+drops <- c("Row.names", "Rand") #going to drop row.names and rand because both are independent and unrelated to the question. 
+
+data_1h <- data_1h[ , !(names(data_1h) %in% drops)] #Now we have our final working data frame!
+
+
+```
+
+```{r}
+
+#Now we can move onto some variable selection - lets look at a few different methods. 
+
+#Best Subset 
+
+library(olsrr)
+
+
+model <- lm(Attrition ~ ., data = data_1h, singular.ok = TRUE)
+ols_step_forward_p(model)
+
+
+```
+
+```{r}
+
+null=lm(Attrition~1, data=data_1h)
+null
+
+
+
+
+```
+
+```{r}
+
+full=lm(Attrition~., data=data_1h)
+full
+
+```
+
+```{r}
+
+step(null, scope=list(lower=null, upper=full), direction="forward")
+
+
+```
+
+```{r}
+ step(full, data=Housing, direction="backward")
+
+```
+```{r}
+
+step(null, scope = list(upper=full), data=Housing, direction="both")
+
+
+```
+```{r}
+
+library(MASS)
+
+
+lm <- lm(Attrition ~ ., data = data_1h)
+lm$coefficients
+
+
+st1 <- stepAIC(lm, direction = "both")
+st2 <- stepAIC(lm, direction = "forward")
+st3 <- stepAIC(lm, direction = "backward")
+
+summary(st1)
+summary(st2)
+summary(st3)
+
+
+```
+```{r}
+
+library(glmnet)
+x <- model.matrix(Attrition~., data_1h)[,-data_1h$Attrition]
+y <- data_1h$Attrition
+
+glmmod <- glmnet(x, y, family="binomial", alpha = 1)
+
+plot(glmmod, xvar = "lambda")
+
+coef(glmmod)[, 10]
+
+caret::getModelInfo("glmnet")$glmnet$varImp
+
+
+```
+
+```{r}
+cvfit = glmnet(x, y, family = "binomial")
+coef(cvfit, s = "lambda.min")
+
+library(caret)
+
+varImp(cvfit)
+
+```
+
+```{r}
+
+# Using glmnet to directly perform CV
+set.seed(849)
+cvob1=cv.glmnet(x,y,family="binomial",alpha=1, type.measure="auc", nfolds = 3,lambda = seq(0.001,0.1,by = 0.001),standardize=FALSE)
+
+cbind(cvob1$lambda,cvob1$cvm)
+
+# best parameter
+cvob1$lambda.mi
+
+# best coefficient
+coef(cvob1, s = "lambda.min")
+
+
+```
+
+```{r}
+
+
+
+
+```
+
