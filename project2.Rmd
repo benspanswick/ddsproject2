@@ -2,7 +2,9 @@
 title: "Project2"
 author: "Ben Spanswick"
 date: "December 3, 2018"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 Lets grab the data, and import some pakcages to start:
@@ -15,6 +17,7 @@ pred = read.csv("CaseStudy2Validation.csv", header = TRUE)
 
 data_original <- data
 pred_original <- pred
+data2 <-data
 
 #install.packages("Amelia")
 #install.packages('lemon')
@@ -29,6 +32,7 @@ library(purrr)
 library(lemon) #prints prettyer tables
 library(qtlcharts) #interactive plots - corr plot in this case
 library(corrplot) #package corrplot
+library(caret)
 
 
 knit_print.data.frame <- lemon_print
@@ -56,11 +60,18 @@ missmap(data,
 
 ```{r}
 
+str(data)
+
+
+```
+
+```{r}
 
 data$Attrition <- ifelse(data$Attrition == "Yes", 1, 0)
-
-
-str(data)
+data$Gender <- ifelse(data$Gender == "Male", 1, 0)
+data$OverTime <- ifelse(data$Gender == "Yes", 1, 0)
+data$BusinessTravel <- ifelse(data$BusinessTravel == "Non-Travel", -1, ifelse(data$BusinessTravel == "Travel_Frequently", 1, 0))
+data$MaritalStatus <- ifelse(data$MaritalStatus == "Divorced", -1, ifelse(data$MaritalStatus == "Married", 1, 0))
 
 ```
 ```{r}
@@ -92,6 +103,8 @@ corrplot(cors, method = "circle") #standard ugly correlation matrix
 
 ```
 
+
+
 ```{r}
 
 NF$ID <-NULL
@@ -122,121 +135,51 @@ head(data_1h, 3)
 ```
 
 ```{r}
-drops <- c("Row.names", "Rand") #going to drop row.names and rand because both are independent and unrelated to the question. 
+drops <- c("Row.names", "Rand", "OVer18_Y", "EmployeeCount") #going to drop row.names and rand because both are independent and unrelated to the question. 
 
 data_1h <- data_1h[ , !(names(data_1h) %in% drops)] #Now we have our final working data frame!
 
-
 ```
+
+
 
 ```{r}
 
-#Now we can move onto some variable selection - lets look at a few different methods. 
+#fit = glmnet(x, y)
 
-#Best Subset 
+#plot(fit)
 
-library(olsrr)
+#print(fit)
 
+#coef(fit, s=0)
 
-model <- lm(Attrition ~ ., data = data_1h, singular.ok = TRUE)
-ols_step_forward_p(model)
+#cvfit = cv.glmnet(x,y)
 
+#plot(cvfit)
 
-```
+#cvfit$lambda.1se
 
-```{r}
-
-null=lm(Attrition~1, data=data_1h)
-null
-
-
-
+#coef(cvfit, s="lambda.1se")
 
 ```
 
-```{r}
 
-full=lm(Attrition~., data=data_1h)
-full
-
-```
 
 ```{r}
 
-step(null, scope=list(lower=null, upper=full), direction="forward")
 
+#train_control <- trainControl(method="cv", number=5)
 
-```
+#data_1h$Attrition = as.factor(data_1h$Attrition)
 
-```{r}
- step(full, data=Housing, direction="backward")
+#glmnetTune <- train(Attrition~., data=data_1h, trControl=train_control, method="glmnet")
 
-```
-```{r}
+## absolute values in current version
+#varImp(glmnetTune, scale = FALSE, competes = FALSE)
 
-step(null, scope = list(upper=full), data=Housing, direction="both")
-
-
-```
-```{r}
-
-library(MASS)
-
-
-lm <- lm(Attrition ~ ., data = data_1h)
-lm$coefficients
-
-
-st1 <- stepAIC(lm, direction = "both")
-st2 <- stepAIC(lm, direction = "forward")
-st3 <- stepAIC(lm, direction = "backward")
-
-summary(st1)
-summary(st2)
-summary(st3)
-
-
-```
-```{r}
-
-library(glmnet)
-x <- model.matrix(Attrition~., data_1h)[,-data_1h$Attrition]
-y <- data_1h$Attrition
-
-glmmod <- glmnet(x, y, family="binomial", alpha = 1)
-
-plot(glmmod, xvar = "lambda")
-
-coef(glmmod)[, 10]
-
-caret::getModelInfo("glmnet")$glmnet$varImp
-
-
-```
-
-```{r}
-cvfit = glmnet(x, y, family = "binomial")
-coef(cvfit, s = "lambda.min")
-
-library(caret)
-
-varImp(cvfit)
-
-```
-
-```{r}
-
-# Using glmnet to directly perform CV
-set.seed(849)
-cvob1=cv.glmnet(x,y,family="binomial",alpha=1, type.measure="auc", nfolds = 3,lambda = seq(0.001,0.1,by = 0.001),standardize=FALSE)
-
-cbind(cvob1$lambda,cvob1$cvm)
-
-# best parameter
-cvob1$lambda.mi
-
-# best coefficient
-coef(cvob1, s = "lambda.min")
+## compared to coefficients with the sign values
+#multiCoefs = lapply(coef(glmnetTune$finalModel, s=glmnetTune$finalModel$tuneValue$lambda),   
+#        FUN=function (x) as.data.frame(t(as.matrix(x))))
 
 
 ```
@@ -246,5 +189,41 @@ coef(cvob1, s = "lambda.min")
 
 
 
+data2 <- data2[,-23]
+
+
+train_control <- trainControl(method="cv", number=5)
+
+data2$Attrition = as.factor(data2$Attrition)
+
+glmnetTune <- train(Attrition~., data=data2, trControl=train_control, method="glmnet")
+
+## absolute values in current version
+varImp(glmnetTune, scale = FALSE, competes = FALSE)
+
+## compared to coefficients with the sign values
+multiCoefs = lapply(coef(glmnetTune$finalModel, s=glmnetTune$finalModel$tuneValue$lambda),   
+        FUN=function (x) as.data.frame(t(as.matrix(x))))
+
+
 ```
+
+```{r}
+
+
+
+simple_mod <- glm(Attrition ~ I(OverTime == 'Yes') + I(JobRole == 'Research Director') + I(JobRole == 'Sales Representative'), data=data2, family='binomial')
+
+ 
+p <- predict(simple_mod, pred, type="response")
+
+attrited  <-ifelse( p > .51, "yes", "no")
+
+output <- cbind(pred, attrited)
+
+```
+
+
+
+
 
