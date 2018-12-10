@@ -21,3 +21,8 @@ project2.Rmd	- Final R markdown project
 project2.html	- HTML Knit from R project
 
 simple_model_output.xlsx -	Simple model results on test set (see Attrited col.)
+
+
+Video Presentation: https://youtu.be/VktgvR8ObRI
+
+
