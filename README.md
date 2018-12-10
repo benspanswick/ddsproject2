@@ -1,2 +1,4 @@
-# ddsproject2
-DDS Repo for project #2
+# DDS Project 2
+## Ben Spanswick
+
+File List:
